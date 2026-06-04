@@ -1,5 +1,6 @@
 export type Proyecto = {
   id: string;
+  user_id: string | null;
   nombre: string;
   slug: string;
   descripcion: string | null;

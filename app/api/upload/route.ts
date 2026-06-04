@@ -91,7 +91,7 @@ export async function POST(request: Request) {
 
     const { data: proyecto, error: proyectoError } = await admin
       .from("proyectos")
-      .select("id, slug")
+      .select("id, slug, user_id")
       .eq("id", proyectoId)
       .single();
 
@@ -99,6 +99,13 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "Proyecto no encontrado" },
         { status: 404 },
+      );
+    }
+
+    if (proyecto.user_id !== user.id) {
+      return NextResponse.json(
+        { error: "No puedes subir versiones a un proyecto que no es tuyo" },
+        { status: 403 },
       );
     }
 
@@ -200,7 +207,7 @@ async function processUploadedZipFromStorage(
 
   const { data: proyecto, error: proyectoError } = await admin
     .from("proyectos")
-    .select("id, slug")
+    .select("id, slug, user_id")
     .eq("id", proyectoId)
     .single();
 
@@ -208,6 +215,13 @@ async function processUploadedZipFromStorage(
     return NextResponse.json(
       { error: "Proyecto no encontrado" },
       { status: 404 },
+    );
+  }
+
+  if (proyecto.user_id !== userId) {
+    return NextResponse.json(
+      { error: "No puedes subir versiones a un proyecto que no es tuyo" },
+      { status: 403 },
     );
   }
 

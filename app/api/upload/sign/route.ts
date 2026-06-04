@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     const admin = createAdminClient();
     const { data: proyecto, error: proyectoError } = await admin
       .from("proyectos")
-      .select("id")
+      .select("id, user_id")
       .eq("id", proyectoId)
       .single();
 
@@ -74,6 +74,13 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "Proyecto no encontrado" },
         { status: 404 },
+      );
+    }
+
+    if (proyecto.user_id !== user.id) {
+      return NextResponse.json(
+        { error: "No puedes subir versiones a un proyecto que no es tuyo" },
+        { status: 403 },
       );
     }
 

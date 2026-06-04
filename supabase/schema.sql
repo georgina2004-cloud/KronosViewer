@@ -2,11 +2,21 @@
 
 create table if not exists public.proyectos (
   id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users (id) on delete cascade default auth.uid(),
   nombre text not null,
   slug text not null unique,
   descripcion text,
   fecha_creacion timestamptz not null default now()
 );
+
+-- Garantiza la columna user_id aunque la tabla ya existiera de una versión
+-- anterior (create table if not exists no añade columnas nuevas).
+alter table public.proyectos
+  add column if not exists user_id uuid references auth.users (id) on delete cascade;
+alter table public.proyectos
+  alter column user_id set default auth.uid();
+
+create index if not exists proyectos_user_id_idx on public.proyectos (user_id);
 
 create table if not exists public.versiones (
   id uuid primary key default gen_random_uuid(),
@@ -21,19 +31,63 @@ create table if not exists public.versiones (
 alter table public.proyectos enable row level security;
 alter table public.versiones enable row level security;
 
-create policy "Usuarios autenticados gestionan proyectos"
-  on public.proyectos
-  for all
-  to authenticated
-  using (true)
-  with check (true);
+-- Limpia políticas previas (permisivas o re-ejecuciones) para que el script
+-- sea idempotente.
+drop policy if exists "Usuarios autenticados gestionan proyectos" on public.proyectos;
+drop policy if exists "Usuarios autenticados gestionan versiones" on public.versiones;
+drop policy if exists "Propietario lee sus proyectos" on public.proyectos;
+drop policy if exists "Propietario crea sus proyectos" on public.proyectos;
+drop policy if exists "Propietario actualiza sus proyectos" on public.proyectos;
+drop policy if exists "Propietario elimina sus proyectos" on public.proyectos;
+drop policy if exists "Propietario gestiona versiones de sus proyectos" on public.versiones;
 
-create policy "Usuarios autenticados gestionan versiones"
+-- Proyectos: cada usuario solo ve y gestiona los suyos.
+create policy "Propietario lee sus proyectos"
+  on public.proyectos
+  for select
+  to authenticated
+  using (user_id = auth.uid());
+
+create policy "Propietario crea sus proyectos"
+  on public.proyectos
+  for insert
+  to authenticated
+  with check (user_id = auth.uid());
+
+create policy "Propietario actualiza sus proyectos"
+  on public.proyectos
+  for update
+  to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+create policy "Propietario elimina sus proyectos"
+  on public.proyectos
+  for delete
+  to authenticated
+  using (user_id = auth.uid());
+
+-- Versiones: heredan la propiedad del proyecto.
+create policy "Propietario gestiona versiones de sus proyectos"
   on public.versiones
   for all
   to authenticated
-  using (true)
-  with check (true);
+  using (
+    exists (
+      select 1
+      from public.proyectos p
+      where p.id = versiones.proyecto_id
+        and p.user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.proyectos p
+      where p.id = versiones.proyecto_id
+        and p.user_id = auth.uid()
+    )
+  );
 
 -- Migración desde columnas antiguas (opcional):
 -- alter table public.proyectos rename column created_at to fecha_creacion;
