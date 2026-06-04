@@ -1,6 +1,5 @@
 "use client";
 
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSidebar } from "@/components/layout/SidebarContext";
@@ -35,7 +34,6 @@ export function AppSidebar() {
 
   const isProyectosActive =
     pathname === "/dashboard" || pathname.startsWith("/proyectos");
-  const isPerfilActive = pathname === "/perfil";
 
   const showLabels = !collapsed || mobileOpen;
   const isCollapsedView = collapsed && !mobileOpen;
@@ -53,17 +51,27 @@ export function AppSidebar() {
       <div
         className={[
           "flex border-b border-zinc-800",
-          isCollapsedView ? "flex-col items-center gap-2 px-2 py-4" : "items-start justify-between gap-2 px-4 py-5",
+          isCollapsedView ? "px-2 py-4 justify-center" : "px-4 py-5",
         ].join(" ")}
       >
-        <Link
-          href="/dashboard"
+        <button
+          type="button"
+          onClick={() => {
+            if (mobileOpen) closeMobile();
+            else toggleCollapsed();
+          }}
           className={[
-            "min-w-0 transition-opacity hover:opacity-90",
-            isCollapsedView ? "flex justify-center" : "block flex-1",
+            "w-full text-left transition-opacity hover:opacity-90 focus:outline-none flex flex-col",
+            isCollapsedView ? "items-center" : "items-start",
           ].join(" ")}
-          onClick={closeMobile}
-          title="KronosViewer"
+          title={mobileOpen ? "Cerrar menú" : collapsed ? "Expandir menú" : "Contraer menú"}
+          aria-label={
+            mobileOpen
+              ? "Cerrar menú lateral"
+              : collapsed
+                ? "Expandir menú lateral"
+                : "Contraer menú lateral"
+          }
         >
           {showLabels ? (
             <>
@@ -77,29 +85,6 @@ export function AppSidebar() {
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-xs font-bold text-white">
               KV
             </span>
-          )}
-        </Link>
-
-        <button
-          type="button"
-          onClick={() => {
-            if (mobileOpen) closeMobile();
-            else toggleCollapsed();
-          }}
-          className="shrink-0 rounded-lg p-2 text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
-          aria-label={
-            mobileOpen
-              ? "Cerrar menú lateral"
-              : collapsed
-                ? "Expandir menú lateral"
-                : "Contraer menú lateral"
-          }
-          title={mobileOpen ? "Cerrar menú" : collapsed ? "Expandir menú" : "Contraer menú"}
-        >
-          {mobileOpen || !collapsed ? (
-            <PanelLeftClose className="h-5 w-5" />
-          ) : (
-            <PanelLeftOpen className="h-5 w-5" />
           )}
         </button>
       </div>
@@ -119,37 +104,6 @@ export function AppSidebar() {
         >
           <ProjectsIcon className="h-5 w-5 shrink-0" />
           {showLabels && <span>Proyectos</span>}
-        </Link>
-
-        <div
-          className={[
-            "my-4 border-t border-zinc-800",
-            isCollapsedView ? "mx-1" : "",
-          ].join(" ")}
-        />
-
-        <Link
-          href="/perfil"
-          className={`relative ${navClass(isPerfilActive, isCollapsedView)}`}
-          aria-current={isPerfilActive ? "page" : undefined}
-          title={user?.email ?? "Perfil"}
-          onClick={closeMobile}
-        >
-          {isPerfilActive && !isCollapsedView && (
-            <span
-              className="absolute -right-3 top-1/2 h-8 w-1 -translate-y-1/2 rounded-l-full bg-indigo-400"
-              aria-hidden
-            />
-          )}
-          <ProfileIcon className="h-5 w-5 shrink-0" />
-          {showLabels && (
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-medium">Perfil</p>
-              <p className="truncate text-xs font-normal text-zinc-400">
-                {user?.email ?? "Sin sesión"}
-              </p>
-            </div>
-          )}
         </Link>
       </nav>
 
@@ -182,14 +136,6 @@ function ProjectsIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-    </svg>
-  );
-}
-
-function ProfileIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
     </svg>
   );
 }
