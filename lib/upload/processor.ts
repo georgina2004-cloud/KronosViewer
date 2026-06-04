@@ -29,6 +29,7 @@ const BUILD_TIMEOUT_MS = 15 * 60 * 1000;
 export type ProcessUploadInput = {
   zipBuffer: Buffer;
   zipFileName: string;
+  existingZipStoragePath?: string;
   proyectoId: string;
   versionTag: string;
   slug: string;
@@ -79,16 +80,19 @@ export async function processZipUpload(
       storagePrefix,
     );
 
-    const zipStoragePath = `${storagePrefix}/${sanitizeFileName(input.zipFileName)}`;
-    const { error: zipBackupError } = await input.admin.storage
-      .from(BUCKET_PRIVADO)
-      .upload(zipStoragePath, input.zipBuffer, {
-        contentType: "application/zip",
-        upsert: true,
-      });
+    let zipStoragePath = input.existingZipStoragePath;
+    if (!zipStoragePath) {
+      zipStoragePath = `${storagePrefix}/${sanitizeFileName(input.zipFileName)}`;
+      const { error: zipBackupError } = await input.admin.storage
+        .from(BUCKET_PRIVADO)
+        .upload(zipStoragePath, input.zipBuffer, {
+          contentType: "application/zip",
+          upsert: true,
+        });
 
-    if (zipBackupError) {
-      throw new Error(`Error al respaldar ZIP: ${zipBackupError.message}`);
+      if (zipBackupError) {
+        throw new Error(`Error al respaldar ZIP: ${zipBackupError.message}`);
+      }
     }
 
     const rutaVisor = viewerPathForObject(
@@ -202,8 +206,14 @@ function runNextProductionBuild(projectRoot: string): void {
     ? `node "${nextBin}" build`
     : "npx --no-install next build";
 
+  // Importante: el build necesita las devDependencies (tailwindcss, postcss,
+  // tipos, etc.). Como NODE_ENV=production hace que npm las omita, se fuerza
+  // su instalación con --include=dev / --production=false.
+  const installCommand =
+    "npm install --include=dev --production=false --no-audit --no-fund";
+
   try {
-    execSync("npm install", {
+    execSync(installCommand, {
       cwd: projectRoot,
       stdio: "pipe",
       encoding: "utf8",
@@ -213,7 +223,7 @@ function runNextProductionBuild(projectRoot: string): void {
       shell: getExecShell(),
     });
   } catch (error) {
-    throw formatExecError("npm install", error);
+    throw formatExecError(installCommand, error);
   }
 
   try {

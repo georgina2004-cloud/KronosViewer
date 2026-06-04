@@ -1,8 +1,22 @@
 "use client";
 
-import { useState, useEffect, FormEvent } from "react";
+import {
+  useState,
+  useEffect,
+  FormEvent,
+  useCallback,
+  useMemo,
+} from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { BUCKET_PRIVADO } from "@/lib/utils";
+import { slimZipFile } from "@/lib/upload/slimZip";
+
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+
+function formatMb(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 interface Proyecto {
   id: string;
@@ -12,9 +26,52 @@ interface Proyecto {
   fecha_creacion: string;
 }
 
+type ApiResult<T> = T & { error?: string };
+
+async function postJson<T>(
+  url: string,
+  body: Record<string, unknown>,
+): Promise<ApiResult<T>> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    credentials: "include",
+  });
+
+  const raw = await response.text();
+  let result: ApiResult<T> = {} as ApiResult<T>;
+  try {
+    result = raw ? (JSON.parse(raw) as ApiResult<T>) : result;
+  } catch {
+    result = {} as ApiResult<T>;
+  }
+
+  if (!response.ok) {
+    const friendly =
+      response.status === 413
+        ? "El archivo ZIP es demasiado grande para enviarse a Vercel. Intenta subirlo de nuevo con el flujo directo a Storage."
+        : response.status === 504 || response.status === 502
+          ? "El servidor tardó demasiado en procesar el ZIP (posible build largo). Inténtalo de nuevo."
+          : undefined;
+    throw new Error(
+      result.error ||
+        friendly ||
+        (raw && raw.length < 300 ? raw.trim() : "") ||
+        `Error ${response.status} al procesar el archivo.`,
+    );
+  }
+
+  return result;
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,11 +90,7 @@ export default function DashboardPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  useEffect(() => {
-    cargarProyectos();
-  }, []);
-
-  const cargarProyectos = async () => {
+  const cargarProyectos = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from("proyectos")
@@ -47,12 +100,21 @@ export default function DashboardPage() {
       if (error) throw error;
       setProyectos(data || []);
       if (data && data.length > 0) setSelectedProyectoId(data[0].id);
-    } catch (error: any) {
-      console.error("Error al cargar proyectos:", error.message);
+    } catch (error: unknown) {
+      console.error(
+        "Error al cargar proyectos:",
+        getErrorMessage(error, "Error desconocido"),
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase]);
+
+  useEffect(() => {
+    // Carga inicial del dashboard desde Supabase.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    cargarProyectos();
+  }, [cargarProyectos]);
 
   const handleCreateProyecto = async (e: FormEvent) => {
     e.preventDefault();
@@ -76,8 +138,13 @@ export default function DashboardPage() {
       setDescripcion("");
       setShowModal(false);
       await cargarProyectos();
-    } catch (error: any) {
-      setFormError(error.message || "Error al crear el proyecto. Quizá el nombre ya existe.");
+    } catch (error: unknown) {
+      setFormError(
+        getErrorMessage(
+          error,
+          "Error al crear el proyecto. Quizá el nombre ya existe.",
+        ),
+      );
     } finally {
       setCreating(false);
     }
@@ -93,23 +160,65 @@ export default function DashboardPage() {
     setUploading(true);
     setUploadMessage(null);
 
-    const formData = new FormData();
-    formData.append("proyectoId", selectedProyectoId);
-    formData.append("versionTag", versionTag.trim());
-    formData.append("file", zipFile);
-
     try {
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-        credentials: "include",
+      setUploadMessage({
+        type: "success",
+        text: "Optimizando ZIP (quitando node_modules y carpetas de build)...",
       });
+      const slim = await slimZipFile(zipFile);
+      const uploadBlob = slim.blob;
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Error desconocido al procesar el archivo.");
+      if (uploadBlob.size > MAX_UPLOAD_BYTES) {
+        throw new Error(
+          `Incluso tras quitar node_modules/.next/.git, el ZIP pesa ${formatMb(
+            uploadBlob.size,
+          )} y supera el límite de 50 MB de Supabase Storage. Sube el límite en Supabase → Storage → Settings (requiere plan Pro) o reduce el contenido del proyecto.`,
+        );
       }
+
+      setUploadMessage({ type: "success", text: "Preparando subida segura..." });
+      const signed = await postJson<{ path: string; token: string }>(
+        "/api/upload/sign",
+        {
+          proyectoId: selectedProyectoId,
+          versionTag: versionTag.trim(),
+          fileName: zipFile.name,
+          fileSize: uploadBlob.size,
+        },
+      );
+
+      setUploadMessage({
+        type: "success",
+        text: slim.removedHeavyDirs
+          ? `Subiendo ZIP optimizado (${formatMb(slim.originalSize)} → ${formatMb(
+              uploadBlob.size,
+            )})...`
+          : "Subiendo ZIP a Storage...",
+      });
+      const { error: uploadError } = await supabase.storage
+        .from(BUCKET_PRIVADO)
+        .uploadToSignedUrl(signed.path, signed.token, uploadBlob, {
+          contentType: "application/zip",
+        });
+
+      if (uploadError) {
+        const tooLarge = /exceeded the maximum allowed size/i.test(
+          uploadError.message,
+        );
+        throw new Error(
+          tooLarge
+            ? "El ZIP supera el límite de 50 MB de Supabase Storage. Sube el límite en Supabase → Storage → Settings (requiere plan Pro)."
+            : uploadError.message,
+        );
+      }
+
+      setUploadMessage({ type: "success", text: "Procesando y desplegando..." });
+      await postJson("/api/upload", {
+        proyectoId: selectedProyectoId,
+        versionTag: versionTag.trim(),
+        zipStoragePath: signed.path,
+        zipFileName: zipFile.name,
+      });
 
       setUploadMessage({ type: "success", text: "¡Versión desplegada y respaldada con éxito!" });
       setVersionTag("");
@@ -117,8 +226,14 @@ export default function DashboardPage() {
       // Limpiar el input file nativo
       const fileInput = document.getElementById("zip-input") as HTMLInputElement;
       if (fileInput) fileInput.value = "";
-    } catch (error: any) {
-      setUploadMessage({ type: "error", text: error.message || "Error de red al intentar subir el archivo." });
+    } catch (error: unknown) {
+      setUploadMessage({
+        type: "error",
+        text: getErrorMessage(
+          error,
+          "Error de red al intentar subir el archivo.",
+        ),
+      });
     } finally {
       setUploading(false);
     }
