@@ -58,3 +58,31 @@ export function publicStorageUrl(objectPath: string): string {
     .join("/");
   return `${base}/storage/v1/object/public/${BUCKET_PUBLICO}/${encoded}`;
 }
+
+// Ruta interna del visor que sirve el sitio con el Content-Type correcto.
+// Supabase Storage entrega los HTML públicos como text/plain (política
+// anti-phishing), así que NO se puede enlazar directo al objeto público:
+// el navegador mostraría el código en vez de renderizar el sitio.
+export function viewerPathForObject(objectPath: string): string {
+  const encoded = objectPath
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return `/visor/${encoded}`;
+}
+
+// Convierte una `ruta_visor` almacenada (que puede ser una URL pública
+// antigua de Supabase o ya una ruta /visor) a la ruta del visor interno.
+export function toViewerUrl(rutaVisor: string): string {
+  if (!rutaVisor) return rutaVisor;
+  if (rutaVisor.startsWith("/visor/")) return rutaVisor;
+
+  const marker = `/storage/v1/object/public/${BUCKET_PUBLICO}/`;
+  const index = rutaVisor.indexOf(marker);
+  if (index >= 0) {
+    return `/visor/${rutaVisor.slice(index + marker.length)}`;
+  }
+
+  return rutaVisor;
+}

@@ -12,7 +12,7 @@ import {
   BUCKET_PRIVADO,
   BUCKET_PUBLICO,
   mimeFromPath,
-  publicStorageUrl,
+  viewerPathForObject,
 } from "@/lib/utils";
 
 const SKIP_DIRS = new Set([
@@ -91,7 +91,7 @@ export async function processZipUpload(
       throw new Error(`Error al respaldar ZIP: ${zipBackupError.message}`);
     }
 
-    const rutaVisor = publicStorageUrl(
+    const rutaVisor = viewerPathForObject(
       `${storagePrefix}/${mainHtmlRelative}`,
     );
 

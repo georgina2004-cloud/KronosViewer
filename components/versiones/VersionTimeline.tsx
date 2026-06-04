@@ -1,7 +1,7 @@
 "use client";
 
 import type { Version } from "@/lib/types";
-import { formatFecha } from "@/lib/utils";
+import { formatFecha, toViewerUrl } from "@/lib/utils";
 
 type VersionTimelineProps = {
   versiones: Version[];
@@ -38,7 +38,7 @@ export function VersionTimeline({
 
               <div className="flex flex-wrap gap-2">
                 <a
-                  href={version.ruta_visor}
+                  href={toViewerUrl(version.ruta_visor)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
