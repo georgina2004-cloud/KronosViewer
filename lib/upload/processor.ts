@@ -69,6 +69,12 @@ export async function processZipUpload(
         );
       }
       mainHtmlRelative = resolveMainHtmlPath(deployDir);
+    } else if (packageRoot && shouldBuildFramework(packageRoot)) {
+      // Framework que requiere build (Vite, CRA, Angular, Vue, Astro, etc.):
+      // se ejecuta su comando de build y se despliega la carpeta de salida.
+      runGenericBuild(packageRoot);
+      deployDir = resolveBuildOutputDir(packageRoot);
+      mainHtmlRelative = resolveMainHtmlPath(deployDir);
     } else {
       deployDir = contentRoot;
       mainHtmlRelative = resolveMainHtmlPath(deployDir);
@@ -154,15 +160,68 @@ function findPackageJsonRoot(dir: string, depth = 0): string | null {
   return null;
 }
 
-function isNextJsProject(projectRoot: string): boolean {
+type PackageJson = {
+  scripts?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+};
+
+function readPackageJson(projectRoot: string): PackageJson {
   const packagePath = path.join(projectRoot, "package.json");
   const raw = fs.readFileSync(packagePath, "utf8");
-  const pkg = JSON.parse(raw) as {
-    dependencies?: Record<string, string>;
-    devDependencies?: Record<string, string>;
-  };
-  const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-  return Boolean(deps.next);
+  return JSON.parse(raw) as PackageJson;
+}
+
+function allDeps(pkg: PackageJson): Record<string, string> {
+  return { ...pkg.dependencies, ...pkg.devDependencies };
+}
+
+function isNextJsProject(projectRoot: string): boolean {
+  return Boolean(allDeps(readPackageJson(projectRoot)).next);
+}
+
+function hasBuildScript(projectRoot: string): boolean {
+  const build = readPackageJson(projectRoot).scripts?.build;
+  return typeof build === "string" && build.trim().length > 0;
+}
+
+// Dependencias de frameworks que SIEMPRE requieren un build aunque traigan un
+// index.html en la raíz (p. ej. Vite usa index.html como entrada de desarrollo).
+const FRAMEWORK_DEPS = new Set([
+  "vite",
+  "react-scripts",
+  "@craco/craco",
+  "@angular/cli",
+  "@angular-devkit/build-angular",
+  "@vue/cli-service",
+  "@sveltejs/kit",
+  "svelte",
+  "astro",
+  "gatsby",
+  "parcel",
+  "@parcel/core",
+  "nuxt",
+  "@11ty/eleventy",
+  "vitepress",
+  "vuepress",
+  "preact-cli",
+]);
+
+function isFrameworkProject(projectRoot: string): boolean {
+  const deps = allDeps(readPackageJson(projectRoot));
+  return Object.keys(deps).some((dep) => FRAMEWORK_DEPS.has(dep));
+}
+
+function hasTopLevelIndexHtml(dir: string): boolean {
+  return fs.existsSync(path.join(dir, "index.html"));
+}
+
+// Decide si hay que construir: el proyecto debe tener un script de build y, o
+// bien no incluye un index.html listo en la raíz, o es un framework conocido
+// que igual necesita compilarse.
+function shouldBuildFramework(projectRoot: string): boolean {
+  if (!hasBuildScript(projectRoot)) return false;
+  return !hasTopLevelIndexHtml(projectRoot) || isFrameworkProject(projectRoot);
 }
 
 function prepareNextProjectForExport(projectRoot: string): void {
@@ -192,8 +251,33 @@ function sanitizePackageJsonScripts(projectRoot: string): void {
   fs.writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
 }
 
+// Importante: el build necesita las devDependencies (tailwindcss, postcss,
+// tipos, etc.). Como NODE_ENV=production hace que npm las omita, se fuerza su
+// instalación con --include=dev / --production=false.
+const INSTALL_COMMAND =
+  "npm install --include=dev --production=false --no-audit --no-fund";
+
+function execInProject(
+  command: string,
+  projectRoot: string,
+  timeoutMs: number,
+): void {
+  try {
+    execSync(command, {
+      cwd: projectRoot,
+      stdio: "pipe",
+      encoding: "utf8",
+      timeout: timeoutMs,
+      maxBuffer: 64 * 1024 * 1024,
+      env: createIsolatedBuildEnv(),
+      shell: getExecShell(),
+    });
+  } catch (error) {
+    throw formatExecError(command, error);
+  }
+}
+
 function runNextProductionBuild(projectRoot: string): void {
-  const env = createIsolatedBuildEnv();
   const nextBin = path.join(
     projectRoot,
     "node_modules",
@@ -206,39 +290,54 @@ function runNextProductionBuild(projectRoot: string): void {
     ? `node "${nextBin}" build`
     : "npx --no-install next build";
 
-  // Importante: el build necesita las devDependencies (tailwindcss, postcss,
-  // tipos, etc.). Como NODE_ENV=production hace que npm las omita, se fuerza
-  // su instalación con --include=dev / --production=false.
-  const installCommand =
-    "npm install --include=dev --production=false --no-audit --no-fund";
+  execInProject(INSTALL_COMMAND, projectRoot, NPM_TIMEOUT_MS);
+  execInProject(buildCommand, projectRoot, BUILD_TIMEOUT_MS);
+}
 
-  try {
-    execSync(installCommand, {
-      cwd: projectRoot,
-      stdio: "pipe",
-      encoding: "utf8",
-      timeout: NPM_TIMEOUT_MS,
-      maxBuffer: 64 * 1024 * 1024,
-      env,
-      shell: getExecShell(),
-    });
-  } catch (error) {
-    throw formatExecError(installCommand, error);
+// Build genérico para frameworks no-Next (Vite, CRA, Angular, Vue, Astro, ...).
+function runGenericBuild(projectRoot: string): void {
+  execInProject(INSTALL_COMMAND, projectRoot, NPM_TIMEOUT_MS);
+  execInProject("npm run build", projectRoot, BUILD_TIMEOUT_MS);
+}
+
+// Carpetas donde los frameworks suelen dejar el sitio estático ya compilado.
+const BUILD_OUTPUT_CANDIDATES = [
+  "dist",
+  "build",
+  "out",
+  "public",
+  "www",
+  "_site",
+  ".output/public",
+  ".vitepress/dist",
+  "docs/.vitepress/dist",
+];
+
+function resolveBuildOutputDir(projectRoot: string): string {
+  for (const candidate of BUILD_OUTPUT_CANDIDATES) {
+    const base = path.join(projectRoot, candidate);
+    if (!fs.existsSync(base) || !fs.statSync(base).isDirectory()) continue;
+    const indexDir = findDirWithIndexHtml(base);
+    if (indexDir) return indexDir;
   }
 
-  try {
-    execSync(buildCommand, {
-      cwd: projectRoot,
-      stdio: "pipe",
-      encoding: "utf8",
-      timeout: BUILD_TIMEOUT_MS,
-      maxBuffer: 64 * 1024 * 1024,
-      env,
-      shell: getExecShell(),
-    });
-  } catch (error) {
-    throw formatExecError(buildCommand, error);
-  }
+  throw new Error(
+    "El build se ejecutó pero no se encontró una carpeta de salida con index.html " +
+      "(se buscó en dist, build, out, public, .output/public, etc.). " +
+      "Revisa el comando o la configuración de build del framework.",
+  );
+}
+
+// Devuelve el directorio que contiene el index.html menos profundo (maneja
+// salidas anidadas como dist/<app>/browser de Angular).
+function findDirWithIndexHtml(rootDir: string): string | null {
+  const indexFiles = collectHtmlFiles(rootDir, rootDir)
+    .filter((file) => path.basename(file.rel).toLowerCase() === "index.html")
+    .sort((a, b) => a.depth - b.depth);
+
+  if (indexFiles.length === 0) return null;
+
+  return path.join(rootDir, path.dirname(indexFiles[0].rel));
 }
 
 function getExecShell(): string {

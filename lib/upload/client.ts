@@ -2,12 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { slimZipFile } from "@/lib/upload/slimZip";
 import { BUCKET_PRIVADO } from "@/lib/utils";
 
-// Límite por archivo de Supabase Storage. En el plan Free son 50 MB (tope duro).
-// Si subes el límite del bucket (plan Pro), ajusta NEXT_PUBLIC_MAX_UPLOAD_MB
-// para que la app lo respete sin tocar código.
+// Límite por archivo, alineado con el "file size limit" del bucket en Supabase
+// Storage. Por defecto 100 MB; se puede sobrescribir con NEXT_PUBLIC_MAX_UPLOAD_MB
+// (útil si subes/bajas el límite del bucket) sin tocar código.
+const DEFAULT_MAX_UPLOAD_MB = 100;
 const MAX_UPLOAD_MB = (() => {
   const raw = Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_MB);
-  return Number.isFinite(raw) && raw > 0 ? raw : 50;
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_UPLOAD_MB;
 })();
 const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 
