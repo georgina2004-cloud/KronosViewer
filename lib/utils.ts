@@ -46,8 +46,12 @@ export function mimeFromPath(path: string): string {
 
 export const BUCKET_PUBLICO = "sitios-desplegados";
 export const BUCKET_PRIVADO = "respaldos-zips";
+export const BUCKET_AVATARS = "avatars";
 
-export function publicStorageUrl(objectPath: string): string {
+export function publicStorageUrl(
+  objectPath: string,
+  bucket: string = BUCKET_PUBLICO,
+): string {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!base) {
     throw new Error("NEXT_PUBLIC_SUPABASE_URL no está configurada");
@@ -56,7 +60,11 @@ export function publicStorageUrl(objectPath: string): string {
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/");
-  return `${base}/storage/v1/object/public/${BUCKET_PUBLICO}/${encoded}`;
+  return `${base}/storage/v1/object/public/${bucket}/${encoded}`;
+}
+
+export function publicAvatarUrl(objectPath: string): string {
+  return publicStorageUrl(objectPath, BUCKET_AVATARS);
 }
 
 // Ruta interna del visor que sirve el sitio con el Content-Type correcto.

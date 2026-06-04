@@ -9,13 +9,13 @@ import {
   Pencil,
   X,
 } from "lucide-react";
-import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
 import {
-  avatarUrlFromProfile,
   profileFromUser,
+  resolveAvatarUrl,
   type ProfileFormValues,
 } from "@/lib/profile";
 
@@ -42,6 +42,7 @@ export function ProfileView() {
     text: string;
   } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [avatarOverride, setAvatarOverride] = useState<string | null>(null);
 
   const syncFromUser = useCallback(() => {
     const values = profileFromUser(user);
@@ -55,7 +56,8 @@ export function ProfileView() {
   }, [syncFromUser]);
 
   const displayName = form.nombreCompleto || form.usuario || "Usuario";
-  const avatarUrl = avatarUrlFromProfile(displayName, form.correo);
+  const avatarUrl =
+    avatarOverride ?? resolveAvatarUrl(user, displayName, form.correo);
   const firstName = displayName.split(" ")[0] ?? displayName;
 
   const handleCancel = () => {
@@ -203,17 +205,25 @@ export function ProfileView() {
 
           {/* Avatar y nombre */}
           <div className="mb-10 flex flex-col items-center text-center">
-            <div className="relative h-28 w-28 overflow-hidden rounded-full ring-4 ring-[#F0EFFF]">
-              <Image
-                src={avatarUrl}
-                alt={displayName}
-                width={112}
-                height={112}
-                className="h-full w-full object-cover"
-                unoptimized
-              />
-            </div>
-            <h2 className="mt-4 text-xl font-bold text-[#635BFF]">{displayName}</h2>
+            <ProfileAvatar
+              src={avatarUrl}
+              alt={displayName}
+              size="lg"
+              editable
+              ringClassName="ring-4 ring-[#F0EFFF]"
+              onUploaded={(url) => {
+                setAvatarOverride(url);
+                setMessage({
+                  type: "success",
+                  text: "Foto de perfil actualizada.",
+                });
+              }}
+              onError={(text) => setMessage({ type: "error", text })}
+            />
+            <p className="mt-2 text-xs text-zinc-400">
+              Haz clic en la foto para cambiarla
+            </p>
+            <h2 className="mt-2 text-xl font-bold text-[#635BFF]">{displayName}</h2>
             <div className="mt-2 flex gap-1" aria-label="Valoración">
               {[1, 2, 3, 4, 5].map((star) => (
                 <span
