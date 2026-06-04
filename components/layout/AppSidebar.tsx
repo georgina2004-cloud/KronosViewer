@@ -1,16 +1,19 @@
 "use client";
 
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useSidebar } from "@/components/layout/SidebarContext";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
 
-function navClass(active: boolean, disabled?: boolean) {
-  if (disabled) {
-    return "flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-zinc-500 cursor-not-allowed opacity-60";
-  }
+function navClass(active: boolean, collapsed: boolean) {
+  const base = collapsed
+    ? "flex items-center justify-center rounded-lg p-2.5 text-sm font-medium transition-colors"
+    : "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors";
+
   return [
-    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+    base,
     active
       ? "bg-indigo-600 text-white shadow-sm"
       : "text-zinc-300 hover:bg-zinc-800 hover:text-white",
@@ -22,6 +25,7 @@ export function AppSidebar() {
   const router = useRouter();
   const { user } = useAuth();
   const supabase = createClient();
+  const { collapsed, mobileOpen, toggleCollapsed, closeMobile } = useSidebar();
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -33,70 +37,141 @@ export function AppSidebar() {
     pathname === "/dashboard" || pathname.startsWith("/proyectos");
   const isPerfilActive = pathname === "/perfil";
 
-  return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 text-zinc-100">
-      <div className="border-b border-zinc-800 px-5 py-6">
-        <Link href="/dashboard" className="block">
-          <span className="text-lg font-semibold tracking-tight text-white">
-            Kronos
-            <span className="text-indigo-400">Viewer</span>
-          </span>
-          <p className="mt-1 text-xs text-zinc-500">Despliegue de prototipos</p>
-        </Link>
-      </div>
+  const showLabels = !collapsed || mobileOpen;
+  const isCollapsedView = collapsed && !mobileOpen;
 
-      <nav className="flex-1 space-y-1 px-3 py-4">
+  return (
+    <aside
+      className={[
+        "flex h-full shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 text-zinc-100 transition-[width,transform] duration-300 ease-in-out",
+        isCollapsedView ? "w-[4.5rem]" : "w-64",
+        "max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:w-64 max-md:shadow-2xl",
+        mobileOpen ? "max-md:translate-x-0" : "max-md:-translate-x-full",
+      ].join(" ")}
+      aria-label="Navegación principal"
+    >
+      <div
+        className={[
+          "flex border-b border-zinc-800",
+          isCollapsedView ? "flex-col items-center gap-2 px-2 py-4" : "items-start justify-between gap-2 px-4 py-5",
+        ].join(" ")}
+      >
         <Link
           href="/dashboard"
-          className={navClass(isProyectosActive)}
-          aria-current={isProyectosActive ? "page" : undefined}
+          className={[
+            "min-w-0 transition-opacity hover:opacity-90",
+            isCollapsedView ? "flex justify-center" : "block flex-1",
+          ].join(" ")}
+          onClick={closeMobile}
+          title="KronosViewer"
         >
-          <ProjectsIcon className="h-5 w-5 shrink-0" />
-          Proyectos
+          {showLabels ? (
+            <>
+              <span className="text-lg font-semibold tracking-tight text-white">
+                Kronos
+                <span className="text-indigo-400">Viewer</span>
+              </span>
+              <p className="mt-1 text-xs text-zinc-500">Despliegue de prototipos</p>
+            </>
+          ) : (
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-xs font-bold text-white">
+              KV
+            </span>
+          )}
         </Link>
 
-        <span
-          className={navClass(false, true)}
-          title="Módulo en desarrollo"
+        <button
+          type="button"
+          onClick={() => {
+            if (mobileOpen) closeMobile();
+            else toggleCollapsed();
+          }}
+          className="shrink-0 rounded-lg p-2 text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
+          aria-label={
+            mobileOpen
+              ? "Cerrar menú lateral"
+              : collapsed
+                ? "Expandir menú lateral"
+                : "Contraer menú lateral"
+          }
+          title={mobileOpen ? "Cerrar menú" : collapsed ? "Expandir menú" : "Contraer menú"}
         >
-          <HistoryIcon className="h-5 w-5 shrink-0" />
-          Historial Global
-          <span className="ml-auto rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
-            Pronto
-          </span>
-        </span>
+          {mobileOpen || !collapsed ? (
+            <PanelLeftClose className="h-5 w-5" />
+          ) : (
+            <PanelLeftOpen className="h-5 w-5" />
+          )}
+        </button>
+      </div>
 
-        <div className="my-4 border-t border-zinc-800" />
+      <nav
+        className={[
+          "flex-1 space-y-1 py-4",
+          isCollapsedView ? "px-2" : "px-3",
+        ].join(" ")}
+      >
+        <Link
+          href="/dashboard"
+          className={navClass(isProyectosActive, isCollapsedView)}
+          aria-current={isProyectosActive ? "page" : undefined}
+          title="Proyectos"
+          onClick={closeMobile}
+        >
+          <ProjectsIcon className="h-5 w-5 shrink-0" />
+          {showLabels && <span>Proyectos</span>}
+        </Link>
+
+        <div
+          className={[
+            "my-4 border-t border-zinc-800",
+            isCollapsedView ? "mx-1" : "",
+          ].join(" ")}
+        />
 
         <Link
           href="/perfil"
-          className={`relative ${navClass(isPerfilActive)}`}
+          className={`relative ${navClass(isPerfilActive, isCollapsedView)}`}
           aria-current={isPerfilActive ? "page" : undefined}
+          title={user?.email ?? "Perfil"}
+          onClick={closeMobile}
         >
-          {isPerfilActive && (
+          {isPerfilActive && !isCollapsedView && (
             <span
               className="absolute -right-3 top-1/2 h-8 w-1 -translate-y-1/2 rounded-l-full bg-indigo-400"
               aria-hidden
             />
           )}
           <ProfileIcon className="h-5 w-5 shrink-0" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-medium">Perfil</p>
-            <p className="truncate text-xs font-normal text-zinc-400">
-              {user?.email ?? "Sin sesión"}
-            </p>
-          </div>
+          {showLabels && (
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium">Perfil</p>
+              <p className="truncate text-xs font-normal text-zinc-400">
+                {user?.email ?? "Sin sesión"}
+              </p>
+            </div>
+          )}
         </Link>
       </nav>
 
-      <div className="border-t border-zinc-800 p-3">
+      <div
+        className={[
+          "border-t border-zinc-800 p-3",
+          isCollapsedView ? "px-2" : "",
+        ].join(" ")}
+      >
         <button
           type="button"
           onClick={handleSignOut}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-700 px-3 py-2.5 text-sm font-medium text-zinc-200 transition hover:border-red-500/50 hover:bg-red-950/40 hover:text-red-200"
+          title="Cerrar sesión"
+          className={[
+            "flex w-full items-center rounded-lg border border-zinc-700 text-sm font-medium text-zinc-200 transition hover:border-red-500/50 hover:bg-red-950/40 hover:text-red-200",
+            isCollapsedView
+              ? "justify-center p-2.5"
+              : "justify-center gap-2 px-3 py-2.5",
+          ].join(" ")}
         >
-          <LogoutIcon className="h-4 w-4" />
-          Cerrar sesión
+          <LogoutIcon className="h-4 w-4 shrink-0" />
+          {showLabels && <span>Cerrar sesión</span>}
         </button>
       </div>
     </aside>
@@ -107,14 +182,6 @@ function ProjectsIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-    </svg>
-  );
-}
-
-function HistoryIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   );
 }
