@@ -50,6 +50,10 @@ export function createIsolatedBuildEnv(): NodeJS.ProcessEnv {
     npm_config_fund: "false",
     npm_config_audit: "false",
     NEXT_DISABLE_TURBOPACK: "1",
+    HOME: "/tmp",
+    USERPROFILE: "/tmp",
+    npm_config_cache: "/tmp/.npm",
+    NPM_CONFIG_CACHE: "/tmp/.npm",
   };
 
   for (const [key, value] of Object.entries(process.env)) {
