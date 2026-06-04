@@ -7,7 +7,7 @@ import path from "path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createIsolatedBuildEnv } from "@/lib/upload/build-env";
 import { removeWorkDirectory } from "@/lib/upload/cleanup";
-import { ensureNextExportOutput } from "@/lib/upload/next-config";
+import { ensureNextExportOutput } from "@/lib/upload/nextExportConfig";
 import {
   BUCKET_PRIVADO,
   BUCKET_PUBLICO,
@@ -45,7 +45,7 @@ export async function processZipUpload(
   input: ProcessUploadInput,
 ): Promise<ProcessUploadResult> {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "kronos-upload-"));
-  const extractDir = path.join(workDir, "extracted");
+  const extractDir = path.join(/*turbopackIgnore: true*/ workDir, "extracted");
 
   try {
     fs.mkdirSync(extractDir, { recursive: true });
@@ -137,7 +137,7 @@ function resolveContentRoot(extractDir: string): string {
     .filter((entry) => !entry.name.startsWith(".") && entry.name !== "__MACOSX");
 
   if (entries.length === 1 && entries[0].isDirectory()) {
-    return path.join(extractDir, entries[0].name);
+    return path.join(/*turbopackIgnore: true*/ extractDir, entries[0].name);
   }
 
   return extractDir;
@@ -146,14 +146,17 @@ function resolveContentRoot(extractDir: string): string {
 function findPackageJsonRoot(dir: string, depth = 0): string | null {
   if (depth > 4) return null;
 
-  const packagePath = path.join(dir, "package.json");
+  const packagePath = path.join(/*turbopackIgnore: true*/ dir, "package.json");
   if (fs.existsSync(packagePath)) {
     return dir;
   }
 
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (!entry.isDirectory() || SKIP_DIRS.has(entry.name)) continue;
-    const nested = findPackageJsonRoot(path.join(dir, entry.name), depth + 1);
+    const nested = findPackageJsonRoot(
+      path.join(/*turbopackIgnore: true*/ dir, entry.name),
+      depth + 1,
+    );
     if (nested) return nested;
   }
 
@@ -167,7 +170,10 @@ type PackageJson = {
 };
 
 function readPackageJson(projectRoot: string): PackageJson {
-  const packagePath = path.join(projectRoot, "package.json");
+  const packagePath = path.join(
+    /*turbopackIgnore: true*/ projectRoot,
+    "package.json",
+  );
   const raw = fs.readFileSync(packagePath, "utf8");
   return JSON.parse(raw) as PackageJson;
 }
@@ -213,7 +219,7 @@ function isFrameworkProject(projectRoot: string): boolean {
 }
 
 function hasTopLevelIndexHtml(dir: string): boolean {
-  return fs.existsSync(path.join(dir, "index.html"));
+  return fs.existsSync(path.join(/*turbopackIgnore: true*/ dir, "index.html"));
 }
 
 // Decide si hay que construir: el proyecto debe tener un script de build y, o
@@ -230,7 +236,10 @@ function prepareNextProjectForExport(projectRoot: string): void {
 }
 
 function sanitizePackageJsonScripts(projectRoot: string): void {
-  const packagePath = path.join(projectRoot, "package.json");
+  const packagePath = path.join(
+    /*turbopackIgnore: true*/ projectRoot,
+    "package.json",
+  );
   const raw = fs.readFileSync(packagePath, "utf8");
   const pkg = JSON.parse(raw) as {
     scripts?: Record<string, string>;
@@ -315,7 +324,7 @@ const BUILD_OUTPUT_CANDIDATES = [
 
 function resolveBuildOutputDir(projectRoot: string): string {
   for (const candidate of BUILD_OUTPUT_CANDIDATES) {
-    const base = path.join(projectRoot, candidate);
+    const base = path.join(/*turbopackIgnore: true*/ projectRoot, candidate);
     if (!fs.existsSync(base) || !fs.statSync(base).isDirectory()) continue;
     const indexDir = findDirWithIndexHtml(base);
     if (indexDir) return indexDir;
@@ -337,7 +346,10 @@ function findDirWithIndexHtml(rootDir: string): string | null {
 
   if (indexFiles.length === 0) return null;
 
-  return path.join(rootDir, path.dirname(indexFiles[0].rel));
+  return path.join(
+    /*turbopackIgnore: true*/ rootDir,
+    path.dirname(indexFiles[0].rel),
+  );
 }
 
 function getExecShell(): string {
@@ -401,7 +413,7 @@ function collectHtmlFiles(
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (SKIP_DIRS.has(entry.name) || entry.name.startsWith(".")) continue;
 
-    const absolute = path.join(dir, entry.name);
+    const absolute = path.join(/*turbopackIgnore: true*/ dir, entry.name);
 
     if (entry.isDirectory()) {
       results.push(...collectHtmlFiles(absolute, baseDir, depth + 1));
@@ -452,7 +464,7 @@ function collectFiles(dir: string): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (SKIP_DIRS.has(entry.name)) continue;
 
-    const absolute = path.join(dir, entry.name);
+    const absolute = path.join(/*turbopackIgnore: true*/ dir, entry.name);
     if (entry.isDirectory()) {
       files.push(...collectFiles(absolute));
     } else {

@@ -57,27 +57,26 @@ export function injectExportIntoConfig(content: string): string {
 }
 
 export function ensureNextExportOutput(projectRoot: string): void {
-  const configNames = [
-    "next.config.mjs",
-    "next.config.js",
-    "next.config.ts",
-    "next.config.cjs",
-  ];
+  const baseName = ["next", "config"].join(".");
+  const configNames = ["mjs", "js", "ts", "cjs"].map(
+    (extension) => `${baseName}.${extension}`,
+  );
 
   const existing = configNames
-    .map((name) => path.join(projectRoot, name))
-    .find((filePath) => fs.existsSync(filePath));
+    .map((name) => path.join(/*turbopackIgnore: true*/ projectRoot, name))
+    .find((filePath) => fs.existsSync(/*turbopackIgnore: true*/ filePath));
 
   if (!existing) {
+    const configFileName = `${baseName}.mjs`;
     fs.writeFileSync(
-      path.join(projectRoot, "next.config.mjs"),
+      path.join(/*turbopackIgnore: true*/ projectRoot, configFileName),
       "const nextConfig = { output: 'export' };\nexport default nextConfig;\n",
       "utf8",
     );
     return;
   }
 
-  const raw = fs.readFileSync(existing, "utf8");
+  const raw = fs.readFileSync(/*turbopackIgnore: true*/ existing, "utf8");
   let patched = stripTurbopackFromConfigContent(raw);
   if (!/output\s*:\s*['"]export['"]/.test(patched)) {
     patched = injectExportIntoConfig(patched);
@@ -86,16 +85,27 @@ export function ensureNextExportOutput(projectRoot: string): void {
 
   if (/turbopack|withTurbopack/i.test(patched)) {
     const backupPath = `${existing}.kronos-backup`;
-    if (!fs.existsSync(backupPath)) {
-      fs.copyFileSync(existing, backupPath);
+    if (!fs.existsSync(/*turbopackIgnore: true*/ backupPath)) {
+      fs.copyFileSync(
+        /*turbopackIgnore: true*/ existing,
+        /*turbopackIgnore: true*/ backupPath,
+      );
     }
-    const overridePath = path.join(projectRoot, "next.config.mjs");
-    fs.writeFileSync(overridePath, MINIMAL_EXPORT_CONFIG, "utf8");
+    const configFileName = `${baseName}.mjs`;
+    const overridePath = path.join(
+      /*turbopackIgnore: true*/ projectRoot,
+      configFileName,
+    );
+    fs.writeFileSync(
+      /*turbopackIgnore: true*/ overridePath,
+      MINIMAL_EXPORT_CONFIG,
+      "utf8",
+    );
     if (path.resolve(existing) !== path.resolve(overridePath)) {
-      fs.unlinkSync(existing);
+      fs.unlinkSync(/*turbopackIgnore: true*/ existing);
     }
     return;
   }
 
-  fs.writeFileSync(existing, patched, "utf8");
+  fs.writeFileSync(/*turbopackIgnore: true*/ existing, patched, "utf8");
 }

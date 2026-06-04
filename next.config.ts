@@ -21,6 +21,9 @@ const supabasePattern = supabaseStoragePattern();
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  turbopack: {
+    root: __dirname,
+  },
   experimental: {
     proxyClientMaxBodySize: "100mb",
   },
