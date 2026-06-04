@@ -41,7 +41,7 @@ export function AppSidebar() {
             Kronos
             <span className="text-indigo-400">Viewer</span>
           </span>
-          <p className="mt-1 text-xs text-zinc-500">Despliegue de maquetas</p>
+          <p className="mt-1 text-xs text-zinc-500">Despliegue de prototipos</p>
         </Link>
       </div>
 

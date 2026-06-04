@@ -124,6 +124,7 @@ export async function POST(request: Request) {
       ruta_visor: result.ruta_visor,
     });
   } catch (error) {
+    console.error("[api/upload] Error al procesar el ZIP:", error);
     const message =
       error instanceof Error ? error.message : "Error interno del servidor";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -64,12 +64,14 @@ export function publicStorageUrl(objectPath: string): string {
 // anti-phishing), así que NO se puede enlazar directo al objeto público:
 // el navegador mostraría el código en vez de renderizar el sitio.
 export function viewerPathForObject(objectPath: string): string {
+  const normalized = objectPath.replace(/\/index\.html?$/i, "");
   const encoded = objectPath
+    .replace(/\/index\.html?$/i, "")
     .split("/")
     .filter(Boolean)
     .map((segment) => encodeURIComponent(segment))
     .join("/");
-  return `/visor/${encoded}`;
+  return normalized ? `/visor/${encoded}` : "/visor";
 }
 
 // Convierte una `ruta_visor` almacenada (que puede ser una URL pública

@@ -280,7 +280,7 @@ export default function ProyectoHistorialPage() {
           Subir nueva versión
         </h2>
         <p className="mt-1 text-sm text-zinc-500">
-          Solo necesitas el archivo ZIP de la maqueta y el tag de la versión.
+          Solo necesitas el archivo ZIP del prototipo y el tag de la versión.
         </p>
 
         <form
@@ -303,7 +303,7 @@ export default function ProyectoHistorialPage() {
 
           <div>
             <label className="mb-1 block text-sm font-medium text-zinc-700">
-              Archivo Maqueta (.zip)
+              Archivo Prototipo (.zip)
             </label>
             <input
               id="zip-input"
@@ -335,7 +335,7 @@ export default function ProyectoHistorialPage() {
             >
               {uploading
                 ? "Procesando y Desplegando..."
-                : "Subir y Renderizar Maqueta"}
+                : "Subir y Renderizar Prototipo"}
             </button>
           </div>
         </form>
@@ -349,7 +349,7 @@ export default function ProyectoHistorialPage() {
             </h2>
             <p className="mt-1 text-sm text-zinc-500">
               {versiones.length === 0
-                ? "Aún no hay maquetas desplegadas."
+                ? "Aún no hay prototipos desplegados."
                 : `${versiones.length} versión${versiones.length === 1 ? "" : "es"} registrada${versiones.length === 1 ? "" : "s"}.`}
             </p>
           </div>
@@ -384,7 +384,7 @@ export default function ProyectoHistorialPage() {
               Sin versiones todavía
             </h3>
             <p className="mx-auto mt-2 max-w-sm text-sm text-zinc-500">
-              Despliega tu primera maqueta con el formulario de arriba subiendo
+              Despliega tu primer prototipo con el formulario de arriba subiendo
               un archivo ZIP con{" "}
               <code className="rounded bg-zinc-100 px-1 text-xs">index.html</code>{" "}
               en la raíz.

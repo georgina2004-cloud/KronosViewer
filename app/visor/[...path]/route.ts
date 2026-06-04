@@ -18,6 +18,18 @@ export async function GET(request: Request, context: RouteContext) {
     return new Response("Ruta inválida", { status: 400 });
   }
 
+  if (
+    segments.length === 3 &&
+    segments[2].toLowerCase() === "index.html"
+  ) {
+    const url = new URL(request.url);
+    url.pathname = `/visor/${segments
+      .slice(0, 2)
+      .map((segment) => encodeURIComponent(segment))
+      .join("/")}`;
+    return Response.redirect(url, 308);
+  }
+
   const admin = createAdminClient();
   const optimizedImage = await downloadNextImageObject(admin, request, segments);
   if (optimizedImage) {
@@ -159,8 +171,11 @@ function rewriteCss(css: string, siteRoot: string): string {
 }
 
 function rewriteJavascript(javascript: string, siteRoot: string): string {
-  return rewriteAbsoluteQuotedPaths(
-    rewriteNextInternals(javascript, siteRoot),
+  return rewriteRouterBasename(
+    rewriteAbsoluteAssetPaths(
+      rewriteNextInternals(javascript, siteRoot),
+      siteRoot,
+    ),
     siteRoot,
   );
 }
@@ -186,6 +201,26 @@ function rewriteAbsoluteQuotedPaths(content: string, siteRoot: string): string {
       /(\\["'])\/(?!\/|visor\/|_next\/)/g,
       (_match, quote: string) => `${quote}${siteRoot}`,
     );
+}
+
+function rewriteAbsoluteAssetPaths(content: string, siteRoot: string): string {
+  return content.replace(
+    /(["'`])\/(?!\/|visor\/|_next\/)([^"'`\s?#]+\.[a-zA-Z0-9]{2,8})([?#][^"'`]*)?\1/g,
+    (
+      _match,
+      quote: string,
+      assetPath: string,
+      suffix: string | undefined,
+    ) => `${quote}${siteRoot}${assetPath}${suffix ?? ""}${quote}`,
+  );
+}
+
+function rewriteRouterBasename(content: string, siteRoot: string): string {
+  const basename = siteRoot.replace(/\/$/, "");
+  return content.replace(
+    /basename\s*:\s*(["'`])\/\1/g,
+    (_match, quote: string) => `basename:${quote}${basename}${quote}`,
+  );
 }
 
 function safeDecode(value: string): string {

@@ -44,10 +44,11 @@ async function postJson<T>(
         : response.status === 504 || response.status === 502
           ? "El servidor tardó demasiado en procesar el ZIP (posible build largo). Inténtalo de nuevo."
           : undefined;
+    const bodyText = raw ? raw.trim().slice(0, 1500) : "";
     throw new Error(
       result.error ||
         friendly ||
-        (raw && raw.length < 300 ? raw.trim() : "") ||
+        bodyText ||
         `Error ${response.status} al procesar el archivo.`,
     );
   }

@@ -43,7 +43,7 @@ export function VersionTimeline({
                   rel="noopener noreferrer"
                   className="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
                 >
-                  Ver Maqueta
+                  Ver Prototipo
                 </a>
                 <button
                   type="button"
