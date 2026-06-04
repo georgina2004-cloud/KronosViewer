@@ -1,73 +1,56 @@
 ---
 name: kronos-deploy
-description: Despliega un prototipo o proyecto web (HTML estático, Vite, React, Next.js, Astro, etc.) en la plataforma Kronos Viewer como una nueva versión de un proyecto. Úsalo cuando el usuario pida "subir/desplegar/publicar este proyecto a Kronos", "mandar esto a Kronos Viewer", o mencione subir un prototipo a su plataforma de renderizado. Lista los proyectos del usuario, pregunta a cuál subir y con qué tag de versión, y hace el deploy.
+description: Despliega un proyecto web creado en Claude (o en disco local) a Kronos Viewer. Actívala cuando el usuario diga "sube esto a Kronos", "despliega en Kronos", "manda este proyecto a mi plataforma", "publica esto en Kronos Viewer", o cualquier variante. Funciona con proyectos generados en el chat (Claude Design/Artifacts) y con carpetas locales. Lista los proyectos del usuario, pregunta a cuál subir y qué versión, y hace el deploy.
 ---
 
 # Kronos Deploy
 
-Sube proyectos web a **Kronos Viewer** (https://kronos-viewer.vercel.app) como una
-nueva versión de un proyecto existente. La plataforma compila automáticamente los
-frameworks (Vite, CRA, Angular, Next.js, Astro, etc.) y sirve el resultado.
+Despliega proyectos web en **Kronos Viewer** (https://kronos-viewer.vercel.app).
 
-## Requisitos
+## Flujo principal — proyecto creado en Claude
 
-1. **Token de acceso** (Personal Access Token). El usuario lo genera en
-   `https://kronos-viewer.vercel.app/perfil` → "Tokens de acceso" → "Crear token".
-   Debe exportarse como variable de entorno antes de usar el script:
+Cuando el usuario acaba de crear un proyecto en el chat y pide subirlo a Kronos:
 
-   ```bash
-   export KRONOS_TOKEN="kv_xxxxxxxxxxxxxxxx"
-   ```
+1. **Verifica el token**. Pregunta `KRONOS_TOKEN` si no está disponible. El usuario lo genera en `https://kronos-viewer.vercel.app/perfil`.
 
-   Si el usuario no lo ha configurado, pídeselo y guárdalo en `KRONOS_TOKEN`.
+2. **Lista los proyectos** haciendo `GET /api/v1/proyectos` con `Authorization: Bearer <token>`. Muéstralos al usuario y pregunta a cuál subir. Si ninguno es el correcto, ofrece crear uno nuevo con `POST /api/v1/proyectos`.
 
-2. **Python 3** (el script usa solo la librería estándar, sin dependencias).
+3. **Pregunta solo el tag de versión** (ej. `v1.0.0`).
 
-## Flujo de trabajo
+4. **Sube el proyecto** con `POST /api/v1/proyectos/{slug}/versiones` en multipart:
+   - Campo `zip`: el ZIP del proyecto generado en el chat
+   - Campo `versionTag`: el tag elegido
 
-Cuando el usuario pida desplegar un proyecto a Kronos:
+5. **Confirma** con la URL del visor devuelta por la API.
 
-1. **Confirma el token**: verifica que `KRONOS_TOKEN` esté definido. Si no, pídelo.
+## Flujo alternativo — carpeta local
 
-2. **Lista los proyectos del usuario** para saber a cuál subir:
+Si el usuario quiere subir una carpeta de su máquina, usa el script Python:
 
-   ```bash
-   python scripts/kronos_deploy.py list
-   ```
+```bash
+export KRONOS_TOKEN="kv_..."
 
-   Muestra los proyectos (nombre + slug). Si el proyecto destino no existe,
-   ofrece crearlo:
+# Listar proyectos
+python3 '<ruta>/skills/kronos-deploy/scripts/kronos_deploy.py' list
 
-   ```bash
-   python scripts/kronos_deploy.py create --name "Nombre del Proyecto"
-   ```
+# Desplegar carpeta
+python3 '<ruta>/skills/kronos-deploy/scripts/kronos_deploy.py' deploy \
+  --dir '<carpeta-del-proyecto>' \
+  --slug <slug> \
+  --version <tag>
+```
 
-3. **Pregunta el tag de versión** (ej. `v1.0.0`, `v2`, `2026-06-04`). No pidas el
-   nombre del proyecto: ya está creado, solo se necesita el slug destino y la versión.
+La ruta del script es:
+`/Users/kronosdev/Desktop/Kronoscode Projects/KronosViewer/skills/kronos-deploy/scripts/kronos_deploy.py`
 
-4. **Despliega** la carpeta del prototipo:
+El token activo es: `kv_16fd44cb0a0f523e93096deb5074a0ed19562cbb1d07e099`
 
-   ```bash
-   python scripts/kronos_deploy.py deploy \
-     --dir <carpeta-del-proyecto> \
-     --slug <slug-del-proyecto> \
-     --version <tag-de-version>
-   ```
+## API
 
-   El script empaqueta la carpeta en ZIP (excluyendo `node_modules`, `.git`,
-   `dist`, `build`, etc.), la sube y devuelve la URL del visor.
+Todos los endpoints usan `Authorization: Bearer <KRONOS_TOKEN>`:
 
-5. **Confirma** al usuario con la URL del visor que imprime el comando.
+- `GET  /api/v1/proyectos` — lista proyectos del usuario
+- `POST /api/v1/proyectos` — crea proyecto `{ nombre, descripcion }`
+- `POST /api/v1/proyectos/{slug}/versiones` — sube versión (multipart: `zip` + `versionTag`)
 
-## Notas
-
-- La base de la API se puede sobrescribir con `KRONOS_BASE_URL` (por defecto la de
-  producción). Útil para desarrollo local: `export KRONOS_BASE_URL=http://localhost:3000`.
-- Para que se renderice, el proyecto debe tener un `index.html` en la raíz (sitios
-  estáticos) o un script `build` que genere la salida (frameworks).
-- El límite de subida por archivo es de ~100 MB; envía solo el código fuente, no
-  binarios pesados ni `node_modules`.
-- Endpoints usados (todos con `Authorization: Bearer <KRONOS_TOKEN>`):
-  - `GET  /api/v1/proyectos` — lista proyectos.
-  - `POST /api/v1/proyectos` — crea proyecto (`{ nombre, descripcion }`).
-  - `POST /api/v1/proyectos/{slug}/versiones` — multipart `zip` + `versionTag`.
+Base URL: `https://kronos-viewer.vercel.app`

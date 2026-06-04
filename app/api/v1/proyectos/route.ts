@@ -7,10 +7,20 @@ import { slugifyNombre } from "@/lib/utils";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type",
+};
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS });
+}
+
 export async function GET(request: Request) {
   const auth = await resolveApiUser(request);
   if (!auth) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    return NextResponse.json({ error: "No autorizado" }, { status: 401, headers: CORS });
   }
 
   const admin = createAdminClient();
@@ -21,10 +31,10 @@ export async function GET(request: Request) {
     .order("fecha_creacion", { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500, headers: CORS });
   }
 
-  return NextResponse.json({ proyectos: data ?? [] });
+  return NextResponse.json({ proyectos: data ?? [] }, { headers: CORS });
 }
 
 type CreateBody = { nombre?: unknown; descripcion?: unknown };
@@ -32,7 +42,7 @@ type CreateBody = { nombre?: unknown; descripcion?: unknown };
 export async function POST(request: Request) {
   const auth = await resolveApiUser(request);
   if (!auth) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    return NextResponse.json({ error: "No autorizado" }, { status: 401, headers: CORS });
   }
 
   let body: CreateBody;
@@ -41,7 +51,7 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json(
       { error: "La petición debe ser JSON válido" },
-      { status: 400 },
+      { status: 400, headers: CORS },
     );
   }
 
@@ -52,7 +62,7 @@ export async function POST(request: Request) {
   if (!nombre) {
     return NextResponse.json(
       { error: "El nombre del proyecto es obligatorio" },
-      { status: 400 },
+      { status: 400, headers: CORS },
     );
   }
 
@@ -60,16 +70,14 @@ export async function POST(request: Request) {
 
   try {
     const proyecto = await createProyecto(admin, auth.userId, nombre, descripcion);
-    return NextResponse.json({ proyecto }, { status: 201 });
+    return NextResponse.json({ proyecto }, { status: 201, headers: CORS });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "No se pudo crear el proyecto";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500, headers: CORS });
   }
 }
 
-// Inserta el proyecto generando un slug único de forma global (el slug se usa
-// como ruta en Storage); ante colisión reintenta con un sufijo corto.
 async function createProyecto(
   admin: SupabaseClient,
   userId: string,
@@ -93,7 +101,7 @@ async function createProyecto(
         descripcion: descripcion || null,
       })
       .select("id, nombre, slug, descripcion, fecha_creacion")
-      .single();
+      .single()
 
     if (!error && data) return data;
     if (error && error.code !== "23505") throw new Error(error.message);

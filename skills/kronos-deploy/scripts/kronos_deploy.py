@@ -46,14 +46,11 @@ def zip_directory(directory):
             for fname in files:
                 abspath = os.path.join(root, fname)
                 relpath = os.path.relpath(abspath, directory)
-                try:
-                    zinfo = zipfile.ZipInfo.from_file(abspath, relpath)
-                    if zinfo.date_time < MIN_ZIP_DATE:
-                        zinfo.date_time = MIN_ZIP_DATE
-                    with open(abspath, "rb") as f:
-                        zf.writestr(zinfo, f.read())
-                except Exception as e:
-                    print(f"  Saltando {relpath}: {e}", file=sys.stderr)
+                zinfo = zipfile.ZipInfo(relpath)
+                zinfo.date_time = MIN_ZIP_DATE
+                zinfo.compress_type = zipfile.ZIP_DEFLATED
+                with open(abspath, "rb") as f:
+                    zf.writestr(zinfo, f.read())
     return buffer.getvalue()
 
 def _multipart(version_tag, zip_bytes):
