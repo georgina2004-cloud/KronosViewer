@@ -317,7 +317,7 @@ export default function ProyectoHistorialPage() {
 
           {uploadMessage && (
             <p
-              className={`sm:col-span-2 rounded-lg px-3 py-2 text-sm ${
+              className={`sm:col-span-2 whitespace-pre-line rounded-lg px-3 py-2 text-sm ${
                 uploadMessage.type === "success"
                   ? "bg-green-50 text-green-700"
                   : "bg-red-50 text-red-700"

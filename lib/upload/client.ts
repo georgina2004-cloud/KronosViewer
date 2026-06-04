@@ -2,7 +2,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { slimZipFile } from "@/lib/upload/slimZip";
 import { BUCKET_PRIVADO } from "@/lib/utils";
 
-const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+// Límite por archivo de Supabase Storage. En el plan Free son 50 MB (tope duro).
+// Si subes el límite del bucket (plan Pro), ajusta NEXT_PUBLIC_MAX_UPLOAD_MB
+// para que la app lo respete sin tocar código.
+const MAX_UPLOAD_MB = (() => {
+  const raw = Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_MB);
+  return Number.isFinite(raw) && raw > 0 ? raw : 50;
+})();
+const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 
 export function formatMb(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -72,10 +79,15 @@ export async function uploadProjectVersion({
   const uploadBlob = slim.blob;
 
   if (uploadBlob.size > MAX_UPLOAD_BYTES) {
+    const topFiles = slim.largestFiles
+      .map((f) => `• ${f.name} (${formatMb(f.size)})`)
+      .join("\n");
     throw new Error(
       `Incluso tras quitar node_modules/.next/.git, el ZIP pesa ${formatMb(
         uploadBlob.size,
-      )} y supera el límite de 50 MB de Supabase Storage. Sube el límite en Supabase → Storage → Settings (requiere plan Pro) o reduce el contenido del proyecto.`,
+      )} y supera el límite de ${MAX_UPLOAD_MB} MB por archivo de Supabase Storage.\n\n` +
+        `Opciones: sube el límite del bucket en Supabase → Storage → Settings (requiere plan Pro) y ajusta NEXT_PUBLIC_MAX_UPLOAD_MB, o reduce el contenido del proyecto.` +
+        (topFiles ? `\n\nArchivos más pesados:\n${topFiles}` : ""),
     );
   }
 

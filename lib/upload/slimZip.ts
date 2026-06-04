@@ -13,12 +13,15 @@ const SKIP_SEGMENTS = new Set([
   ".vercel",
 ]);
 
+export type LargeFile = { name: string; size: number };
+
 export type SlimZipResult = {
   blob: Blob;
   fileName: string;
   removedHeavyDirs: boolean;
   originalSize: number;
   slimSize: number;
+  largestFiles: LargeFile[];
 };
 
 function shouldSkip(relativePath: string): boolean {
@@ -35,6 +38,7 @@ export async function slimZipFile(file: File): Promise<SlimZipResult> {
 
   let removedHeavyDirs = false;
   let keptFiles = 0;
+  const sizes: LargeFile[] = [];
 
   const entries = Object.values(source.files);
   for (const entry of entries) {
@@ -47,6 +51,7 @@ export async function slimZipFile(file: File): Promise<SlimZipResult> {
     output.file(entry.name, content, {
       date: entry.date ?? undefined,
     });
+    sizes.push({ name: entry.name, size: content.byteLength });
     keptFiles += 1;
   }
 
@@ -59,8 +64,12 @@ export async function slimZipFile(file: File): Promise<SlimZipResult> {
   const blob = await output.generateAsync({
     type: "blob",
     compression: "DEFLATE",
-    compressionOptions: { level: 6 },
+    compressionOptions: { level: 9 },
   });
+
+  const largestFiles = sizes
+    .sort((a, b) => b.size - a.size)
+    .slice(0, 5);
 
   return {
     blob,
@@ -68,5 +77,6 @@ export async function slimZipFile(file: File): Promise<SlimZipResult> {
     removedHeavyDirs,
     originalSize: file.size,
     slimSize: blob.size,
+    largestFiles,
   };
 }
