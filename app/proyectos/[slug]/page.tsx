@@ -296,6 +296,12 @@ export default function ProyectoHistorialPage() {
             (con <code className="rounded bg-amber-100 px-1">index.html</code> en
             la raíz) se suben tal cual.
           </p>
+          <p className="mt-1">
+            En Next.js, <code className="rounded bg-amber-100 px-1">.next</code>{" "}
+            no es una salida estática para el visor: genera y sube{" "}
+            <code className="rounded bg-amber-100 px-1">out</code> usando export
+            estático.
+          </p>
         </div>
 
         <form

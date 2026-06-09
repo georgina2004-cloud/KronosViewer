@@ -496,6 +496,14 @@ function formatExecError(command: string, error: unknown): Error {
           `Detalle: ${detail}`,
       );
     }
+    if (detail && /TAR_ENTRY_ERROR\s+ENOENT|node_modules/i.test(detail)) {
+      return new Error(
+        `Falló ${command}: npm no pudo instalar las dependencias en el entorno temporal. ` +
+          "Si ya hiciste build local, asegúrate de subir una salida estática real: " +
+          "para Vite/React sube `dist` con `index.html`; para Next.js no subas `.next`, genera y sube `out` con export estático. " +
+          `Detalle: ${detail}`,
+      );
+    }
     return new Error(`Falló ${command}: ${detail ?? "error desconocido"}`);
   }
   return new Error(`Falló ${command}`);
