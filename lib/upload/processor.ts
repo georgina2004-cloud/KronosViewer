@@ -60,20 +60,36 @@ export async function processZipUpload(
     let mainHtmlRelative: string;
 
     if (packageRoot && isNextJsProject(packageRoot)) {
-      prepareNextProjectForExport(packageRoot);
-      runNextProductionBuild(packageRoot);
-      deployDir = path.join(packageRoot, "out");
-      if (!fs.existsSync(deployDir)) {
-        throw new Error(
-          "El build de Next.js no generó la carpeta 'out'. Verifica que el proyecto soporte export estático.",
-        );
+      deployDir = resolveExistingBuildOutputDir(packageRoot) ?? "";
+      if (!deployDir) {
+        prepareNextProjectForExport(packageRoot);
+        try {
+          runNextProductionBuild(packageRoot);
+        } catch (error) {
+          throw withPrebuiltFallbackHint(error);
+        }
+        deployDir = path.join(packageRoot, "out");
+        if (!fs.existsSync(deployDir)) {
+          throw new Error(
+            "El build de Next.js no generó la carpeta 'out'. Verifica que el proyecto soporte export estático.",
+          );
+        }
       }
       mainHtmlRelative = resolveMainHtmlPath(deployDir);
     } else if (packageRoot && shouldBuildFramework(packageRoot)) {
-      // Framework que requiere build (Vite, CRA, Angular, Vue, Astro, etc.):
-      // se ejecuta su comando de build y se despliega la carpeta de salida.
-      runGenericBuild(packageRoot);
-      deployDir = resolveBuildOutputDir(packageRoot);
+      // Si el ZIP ya incluye una salida estática (dist/build/out), se usa
+      // directamente y se evita instalar node_modules en el entorno serverless.
+      deployDir = resolveExistingBuildOutputDir(packageRoot) ?? "";
+      if (!deployDir) {
+        // Framework que requiere build (Vite, CRA, Angular, Vue, Astro, etc.):
+        // se ejecuta su comando de build y se despliega la carpeta de salida.
+        try {
+          runGenericBuild(packageRoot);
+        } catch (error) {
+          throw withPrebuiltFallbackHint(error);
+        }
+        deployDir = resolveBuildOutputDir(packageRoot);
+      }
       mainHtmlRelative = resolveMainHtmlPath(deployDir);
     } else {
       deployDir = contentRoot;
@@ -390,6 +406,21 @@ const BUILD_OUTPUT_CANDIDATES = [
   "docs/.vitepress/dist",
 ];
 
+const PREBUILT_OUTPUT_CANDIDATES = BUILD_OUTPUT_CANDIDATES.filter(
+  (candidate) => candidate !== "public",
+);
+
+function resolveExistingBuildOutputDir(projectRoot: string): string | null {
+  for (const candidate of PREBUILT_OUTPUT_CANDIDATES) {
+    const base = path.join(/*turbopackIgnore: true*/ projectRoot, candidate);
+    if (!fs.existsSync(base) || !fs.statSync(base).isDirectory()) continue;
+    const indexDir = findDirWithIndexHtml(base);
+    if (indexDir) return indexDir;
+  }
+
+  return null;
+}
+
 function resolveBuildOutputDir(projectRoot: string): string {
   for (const candidate of BUILD_OUTPUT_CANDIDATES) {
     const base = path.join(/*turbopackIgnore: true*/ projectRoot, candidate);
@@ -403,6 +434,22 @@ function resolveBuildOutputDir(projectRoot: string): string {
       "(se buscó en dist, build, out, public, .output/public, etc.). " +
       "Revisa el comando o la configuración de build del framework.",
   );
+}
+
+function withPrebuiltFallbackHint(error: unknown): Error {
+  const message =
+    error instanceof Error ? error.message : "Error desconocido durante el build.";
+
+  if (/ENOSPC|no space left on device/i.test(message)) {
+    return new Error(
+      `${message}\n\n` +
+        "Este prototipo necesita más espacio del disponible para instalar dependencias en Vercel. " +
+        "Solución recomendada: ejecuta el build localmente (por ejemplo `npm install && npm run build`) " +
+        "y sube un ZIP que incluya la carpeta generada (`dist`, `build` u `out`) o sube directamente esa carpeta comprimida.",
+    );
+  }
+
+  return error instanceof Error ? error : new Error(message);
 }
 
 // Devuelve el directorio que contiene el index.html menos profundo (maneja

@@ -4,7 +4,7 @@ import argparse, io, json, os, sys, uuid, zipfile, urllib.request, urllib.error
 
 DEFAULT_BASE_URL = "https://kronos-viewer.vercel.app"
 MIN_ZIP_DATE = (1980, 1, 1, 0, 0, 0)
-SKIP_DIRS = {"node_modules", ".git", ".next", ".cache", "__MACOSX", ".turbo", ".vercel", "dist", "build", "out", ".svelte-kit", ".output", ".parcel-cache"}
+SKIP_DIRS = {"node_modules", ".git", ".next", ".cache", "__MACOSX", ".turbo", ".vercel", ".svelte-kit", ".parcel-cache"}
 
 def base_url(): return os.environ.get("KRONOS_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
 
