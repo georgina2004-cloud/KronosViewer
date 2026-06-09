@@ -43,17 +43,21 @@ const SAFE_ENV_KEYS = new Set([
   "PROCESSOR_REVISION",
 ]);
 
-export function createIsolatedBuildEnv(): NodeJS.ProcessEnv {
+export type BuildEnvOptions = {
+  cacheDir?: string;
+  homeDir?: string;
+  tmpDir?: string;
+};
+
+export function createIsolatedBuildEnv(
+  options: BuildEnvOptions = {},
+): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     CI: "true",
     NODE_ENV: "production",
     npm_config_fund: "false",
     npm_config_audit: "false",
     NEXT_DISABLE_TURBOPACK: "1",
-    HOME: "/tmp",
-    USERPROFILE: "/tmp",
-    npm_config_cache: "/tmp/.npm",
-    NPM_CONFIG_CACHE: "/tmp/.npm",
   };
 
   for (const [key, value] of Object.entries(process.env)) {
@@ -72,6 +76,23 @@ export function createIsolatedBuildEnv(): NodeJS.ProcessEnv {
 
   if (!env.PATH && process.env.Path) {
     env.PATH = process.env.Path;
+  }
+
+  // Debe ir después de copiar variables seguras para evitar que Vercel/host
+  // reinyecte una cache global persistente en /tmp. Cada upload usa su propio
+  // directorio temporal y se limpia al finalizar.
+  if (options.homeDir) {
+    env.HOME = options.homeDir;
+    env.USERPROFILE = options.homeDir;
+  }
+  if (options.cacheDir) {
+    env.npm_config_cache = options.cacheDir;
+    env.NPM_CONFIG_CACHE = options.cacheDir;
+  }
+  if (options.tmpDir) {
+    env.TMPDIR = options.tmpDir;
+    env.TEMP = options.tmpDir;
+    env.TMP = options.tmpDir;
   }
 
   return env;

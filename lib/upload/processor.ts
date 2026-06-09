@@ -264,12 +264,54 @@ function sanitizePackageJsonScripts(projectRoot: string): void {
 // tipos, etc.). Como NODE_ENV=production hace que npm las omita, se fuerza su
 // instalación con --include=dev / --production=false.
 const INSTALL_COMMAND =
-  "npm install --include=dev --production=false --no-audit --no-fund";
+  "npm install --include=dev --no-audit --no-fund";
+
+type ProjectBuildEnvPaths = {
+  cacheDir: string;
+  homeDir: string;
+  tmpDir: string;
+};
+
+function createProjectBuildEnvPaths(projectRoot: string): ProjectBuildEnvPaths {
+  const envRoot = path.join(
+    /*turbopackIgnore: true*/ projectRoot,
+    ".kronos-build-env",
+  );
+  const paths = {
+    cacheDir: path.join(/*turbopackIgnore: true*/ envRoot, "npm-cache"),
+    homeDir: path.join(/*turbopackIgnore: true*/ envRoot, "home"),
+    tmpDir: path.join(/*turbopackIgnore: true*/ envRoot, "tmp"),
+  };
+
+  fs.mkdirSync(paths.cacheDir, { recursive: true });
+  fs.mkdirSync(paths.homeDir, { recursive: true });
+  fs.mkdirSync(paths.tmpDir, { recursive: true });
+  return paths;
+}
+
+function cleanupBuildEnvPaths(projectRoot: string): void {
+  const envRoot = path.join(
+    /*turbopackIgnore: true*/ projectRoot,
+    ".kronos-build-env",
+  );
+  fs.rmSync(/*turbopackIgnore: true*/ envRoot, {
+    recursive: true,
+    force: true,
+  });
+}
+
+function cleanupLegacyNpmCache(): void {
+  // Versiones anteriores usaban /tmp/.npm como cache global. En Vercel esa
+  // carpeta puede sobrevivir en lambdas calientes y provocar ENOSPC.
+  if (process.platform === "win32") return;
+  fs.rmSync("/tmp/.npm", { recursive: true, force: true });
+}
 
 function execInProject(
   command: string,
   projectRoot: string,
   timeoutMs: number,
+  envPaths: ProjectBuildEnvPaths,
 ): void {
   try {
     execSync(command, {
@@ -278,12 +320,30 @@ function execInProject(
       encoding: "utf8",
       timeout: timeoutMs,
       maxBuffer: 64 * 1024 * 1024,
-      env: createIsolatedBuildEnv(),
+      env: createIsolatedBuildEnv(envPaths),
       shell: getExecShell(),
     });
   } catch (error) {
     throw formatExecError(command, error);
   }
+}
+
+function installDependencies(projectRoot: string): ProjectBuildEnvPaths {
+  cleanupLegacyNpmCache();
+  const envPaths = createProjectBuildEnvPaths(projectRoot);
+  try {
+    execInProject(INSTALL_COMMAND, projectRoot, NPM_TIMEOUT_MS, envPaths);
+  } catch (error) {
+    cleanupBuildEnvPaths(projectRoot);
+    throw error;
+  }
+
+  // La cache ya no se necesita después de instalar y puede ocupar cientos de MB.
+  fs.rmSync(/*turbopackIgnore: true*/ envPaths.cacheDir, {
+    recursive: true,
+    force: true,
+  });
+  return envPaths;
 }
 
 function runNextProductionBuild(projectRoot: string): void {
@@ -299,14 +359,22 @@ function runNextProductionBuild(projectRoot: string): void {
     ? `node "${nextBin}" build`
     : "npx --no-install next build";
 
-  execInProject(INSTALL_COMMAND, projectRoot, NPM_TIMEOUT_MS);
-  execInProject(buildCommand, projectRoot, BUILD_TIMEOUT_MS);
+  const envPaths = installDependencies(projectRoot);
+  try {
+    execInProject(buildCommand, projectRoot, BUILD_TIMEOUT_MS, envPaths);
+  } finally {
+    cleanupBuildEnvPaths(projectRoot);
+  }
 }
 
 // Build genérico para frameworks no-Next (Vite, CRA, Angular, Vue, Astro, ...).
 function runGenericBuild(projectRoot: string): void {
-  execInProject(INSTALL_COMMAND, projectRoot, NPM_TIMEOUT_MS);
-  execInProject("npm run build", projectRoot, BUILD_TIMEOUT_MS);
+  const envPaths = installDependencies(projectRoot);
+  try {
+    execInProject("npm run build", projectRoot, BUILD_TIMEOUT_MS, envPaths);
+  } finally {
+    cleanupBuildEnvPaths(projectRoot);
+  }
 }
 
 // Carpetas donde los frameworks suelen dejar el sitio estático ya compilado.
@@ -374,6 +442,13 @@ function formatExecError(command: string, error: unknown): Error {
         ? execError.stdout
         : execError.stdout?.toString();
     const detail = stderr?.trim() || stdout?.trim() || execError.message;
+    if (detail && /ENOSPC|no space left on device/i.test(detail)) {
+      return new Error(
+        `Falló ${command}: el servidor se quedó sin espacio temporal durante la instalación/build. ` +
+          "Se limpió la cache de npm por upload, pero este prototipo aún puede tener dependencias demasiado pesadas para el entorno serverless. " +
+          `Detalle: ${detail}`,
+      );
+    }
     return new Error(`Falló ${command}: ${detail ?? "error desconocido"}`);
   }
   return new Error(`Falló ${command}`);
