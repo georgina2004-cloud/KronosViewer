@@ -283,6 +283,21 @@ export default function ProyectoHistorialPage() {
           Solo necesitas el archivo ZIP del prototipo y el tag de la versión.
         </p>
 
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+          <p className="font-medium">¿Tu prototipo usa un framework (React, Vite, Next, Angular…)?</p>
+          <p className="mt-1">
+            Compílalo antes con{" "}
+            <code className="rounded bg-amber-100 px-1">npm install &amp;&amp; npm run build</code>{" "}
+            y sube un ZIP que incluya la carpeta generada (
+            <code className="rounded bg-amber-100 px-1">dist</code>,{" "}
+            <code className="rounded bg-amber-100 px-1">build</code> u{" "}
+            <code className="rounded bg-amber-100 px-1">out</code>), o comprime
+            directamente el contenido de esa carpeta. Los sitios HTML estáticos
+            (con <code className="rounded bg-amber-100 px-1">index.html</code> en
+            la raíz) se suben tal cual.
+          </p>
+        </div>
+
         <form
           onSubmit={handleZipUpload}
           className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2"
