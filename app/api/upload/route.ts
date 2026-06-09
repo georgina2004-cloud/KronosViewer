@@ -21,7 +21,7 @@ export async function POST(request: Request) {
 
     const contentType = request.headers.get("content-type") ?? "";
     if (contentType.includes("application/json")) {
-      return processUploadedZipFromStorage(request, user.id);
+      return await processUploadedZipFromStorage(request, user.id);
     }
 
     if (!contentType.includes("multipart/form-data")) {
