@@ -37,7 +37,7 @@ export async function GET(request: Request) {
   return NextResponse.json({ proyectos: data ?? [] }, { headers: CORS });
 }
 
-type CreateBody = { nombre?: unknown; descripcion?: unknown };
+type CreateBody = { nombre?: unknown; descripcion?: unknown }; 
 
 export async function POST(request: Request) {
   const auth = await resolveApiUser(request);
