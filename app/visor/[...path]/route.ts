@@ -155,9 +155,28 @@ function rewriteHtml(html: string, siteRoot: string): string {
     /(\s(?:src|srcset|href|poster)\s*=\s*)(["'])\/(?!\/)/gi,
     (_match, attr: string, quote: string) => `${attr}${quote}${siteRoot}`,
   );
-  return rewriteCss(
-    rewriteAbsoluteQuotedPaths(rewriteNextInternals(withAbsoluteAttrs, siteRoot), siteRoot),
+  const withRelativeAttrs = rewriteRelativeAttrs(
+    rewriteAbsoluteQuotedPaths(
+      rewriteNextInternals(withAbsoluteAttrs, siteRoot),
+      siteRoot,
+    ),
     siteRoot,
+  );
+  return rewriteCss(withRelativeAttrs, siteRoot);
+}
+
+// Sitios estáticos suelen referenciar assets con rutas relativas
+// (href="styles.css", src="assets/foto.jpg"). El visor sirve el HTML en
+// /visor/<slug>/<version> (sin barra final), así que el navegador resolvería
+// esas rutas contra /visor/<slug>/ y perdería el segmento de versión. Aquí se
+// anclan a la raíz real del despliegue. Se excluyen anclas (#), protocolos
+// (http, mailto, tel, data...) y rutas ya absolutas (/), por lo que no afecta a
+// builds de frameworks (que usan rutas absolutas) ni a la navegación interna.
+function rewriteRelativeAttrs(html: string, siteRoot: string): string {
+  return html.replace(
+    /(\s(?:src|href|poster)\s*=\s*)(["'])(?!https?:|\/\/|\/|#|\?|data:|blob:|mailto:|tel:|javascript:)([^"']+)\2/gi,
+    (_match, attr: string, quote: string, value: string) =>
+      `${attr}${quote}${siteRoot}${value}${quote}`,
   );
 }
 
